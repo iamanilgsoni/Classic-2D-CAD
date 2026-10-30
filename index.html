@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classic 2D CAD - .ZEI & A4 PDF Exporter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+            font-family: Tahoma, "Segoe UI", Arial, sans-serif;
+            font-size: 11px; background-color: #f0f0f0; color: #000000;
+        }
+
+        .cad-app { display: flex; width: 100vw; height: 100vh; background: #f0f0f0; }
+
+        .cad-sidebar {
+            width: 246px; min-width: 246px; height: 100%; background-color: #f0f0f0;
+            border-right: 2px groove #d0d0d0; display: flex; flex-direction: column;
+            padding: 3px 4px 3px 3px; overflow-y: auto; overflow-x: hidden;
+        }
+
+        .top-select-bar {
+            display: flex; justify-content: center; align-items: center; gap: 8px;
+            padding: 3px 0 5px 0; border-bottom: 1px solid #d4d4d4; margin-bottom: 4px;
+        }
+
+        .cad-icon-btn {
+            width: 34px; height: 34px; background: #f0f0f0;
+            border: 1px solid #a0a0a0; border-top-color: #ffffff; border-left-color: #ffffff;
+            display: inline-flex; align-items: center; justify-content: center;
+            padding: 0; cursor: pointer; position: relative;
+        }
+        .cad-icon-btn:hover { background: #e5f1fb; border-color: #0078d7; }
+        .cad-icon-btn:active, .cad-icon-btn.active {
+            background: #cce4f7; border: 1px solid #005499; box-shadow: inset 0 0 1px #005499;
+        }
+        .cad-icon-btn.active::after {
+            content: ""; position: absolute; inset: 1px; border: 1px solid #005499; pointer-events: none;
+        }
+
+        .cad-tabs-header {
+            display: flex; align-items: flex-end; padding-left: 1px; margin-bottom: -1px; z-index: 2;
+        }
+        .cad-tab-btn {
+            background: #e4e4e4; border: 1px solid #888888; border-bottom: none;
+            padding: 3px 8px 3px 8px; font-family: Tahoma, sans-serif; font-size: 11px;
+            color: #000; cursor: pointer; margin-right: 1px;
+            border-top-left-radius: 2px; border-top-right-radius: 2px;
+        }
+        .cad-tab-btn.active {
+            background: #f4f4f4; font-weight: bold; padding-top: 4px; padding-bottom: 4px;
+            border-top: 1px solid #ffffff; border-left: 1px solid #ffffff; border-right: 1px solid #444444;
+            margin-bottom: -1px; cursor: default;
+        }
+
+        .cad-tab-box {
+            border: 1px solid #444444; border-top: 1px solid #888888;
+            box-shadow: inset -1px -1px 0 #222, 1px 1px 0 #fff;
+            background: #f0f0f0; padding: 3px; min-height: 140px;
+            display: flex; flex-direction: column; gap: 2px;
+        }
+
+        .tool-row {
+            display: flex; flex-wrap: wrap; gap: 4px; padding: 4px;
+            border: 1px solid #d0d0d0; border-top-color: #999; border-left-color: #999; background: #efefef;
+        }
+
+        .tool-btn {
+            width: 24px; height: 23px; background: #f3f3f3;
+            border: 1px solid #8c8c8c; border-top-color: #ffffff; border-left-color: #ffffff;
+            display: inline-flex; align-items: center; justify-content: center;
+            cursor: pointer; padding: 0; font-family: Tahoma, sans-serif; font-size: 11px; color: #000;
+        }
+        .tool-btn:hover { background: #ddeeff; border-color: #0066cc; }
+        .tool-btn.active { background: #c2daef; border: 1px solid #005499; }
+        .tool-btn.highlight-rect { outline: 1px solid #008800; }
+
+        .prop-panel { margin-top: 6px; display: flex; flex-direction: column; gap: 3px; padding-right: 2px; }
+        .prop-row { display: grid; grid-template-columns: 52px 1fr 56px; align-items: center; height: 21px; }
+        .prop-row.full-select { grid-template-columns: 52px 1fr; }
+        .prop-label { font-size: 11px; color: #000; padding-left: 2px; }
+        .prop-input {
+            width: 100%; height: 20px; border: 1px solid #a0a0a0;
+            border-top-color: #666; border-left-color: #666; background: #ffffff;
+            padding: 1px 4px; font-family: Tahoma, sans-serif; font-size: 11px; color: #000; outline: none;
+        }
+        .prop-input:focus { border-color: #0066cc; background: #fffff8; }
+        .prop-input[readonly] { background: #f4f4f4; color: #555; }
+        .prop-unit-select {
+            height: 20px; border: 1px solid #a0a0a0; border-left: none;
+            background: #eaeaea; font-family: Tahoma, sans-serif; font-size: 11px; padding: 0 2px; color: #000;
+        }
+
+        .cad-ops-box {
+            margin-top: 8px; border: 1px solid #b8b8b8; border-top-color: #ffffff; border-left-color: #ffffff;
+            background: #e9e9e9; padding: 5px; display: flex; flex-direction: column; gap: 4px;
+        }
+        .win-btn {
+            height: 24px; background: linear-gradient(to bottom, #fcfcfc, #dfdfdf);
+            border: 1px solid #707070; border-top-color: #fff; border-left-color: #fff;
+            font-family: Tahoma, sans-serif; font-size: 11px; color: #000;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 6px;
+        }
+        .win-btn:hover { background: linear-gradient(to bottom, #eaf6fd, #bee6fd); border-color: #3c7fb1; }
+        .win-btn:active { background: #d5e8f6; border-top-color: #707070; border-left-color: #707070; }
+        .win-btn.primary-green { background: linear-gradient(to bottom, #e8f8e8, #bce8bc); border-color: #2d7d2d; font-weight: bold; }
+        .win-btn.primary-green:hover { background: linear-gradient(to bottom, #d4f4d4, #9cd89c); }
+
+        .cad-workspace {
+            flex: 1; height: 100%; display: flex; flex-direction: column;
+            background: #ffffff; position: relative; border-left: 1px solid #888;
+        }
+        #cadCanvas { width: 100%; height: 100%; display: block; background: #ffffff; cursor: crosshair; }
+
+        .canvas-status-bar {
+            height: 22px; background: #f0f0f0; border-top: 1px solid #a0a0a0;
+            display: flex; align-items: center; justify-content: space-between; padding: 0 8px; font-size: 11px; color: #222;
+        }
+
+        .modal-backdrop {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.25);
+            display: none; align-items: center; justify-content: center; z-index: 100;
+        }
+        .modal-backdrop.show { display: flex; }
+        .win-dialog { background: #f0f0f0; border: 2px solid #005499; box-shadow: 3px 3px 10px rgba(0,0,0,0.35); width: 320px; font-family: Tahoma, sans-serif; }
+        .win-dialog.wide { width: 520px; }
+        .win-titlebar {
+            background: linear-gradient(to right, #005499, #2b82d4); color: #ffffff;
+            font-weight: bold; padding: 4px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 11px;
+        }
+        .win-close-btn {
+            background: #e04343; color: #fff; border: 1px solid #fff;
+            width: 16px; height: 16px; font-size: 10px; line-height: 12px; text-align: center; cursor: pointer;
+        }
+        .win-dialog-body { padding: 12px; }
+    </style>
+</head>
+<body>
+
+<div class="cad-app">
+    <!-- LEFT SIDEBAR -->
+    <div class="cad-sidebar">
+
+        <!-- Top Left Filename Input -->
+        <div style="display: flex; gap: 4px; align-items: center; padding: 4px 2px 6px 2px; border-bottom: 1px solid #d4d4d4; margin-bottom: 4px;">
+            <label for="filenameInput" style="font-size: 12px; font-weight: bold; color: #222;">File Name:</label>
+            <input type="text" id="filenameInput" placeholder="drawing" style="border: 1px solid #a0a0a0; border-top-color: #666; border-left-color: #666; height: 22px; flex: 1; font-family: Tahoma, sans-serif; font-size: 12px; padding: 0 4px; outline: none;">
+        </div>
+
+        <div class="top-select-bar">
+            <button class="cad-icon-btn active" id="selModeSingle" title="Individual Selection" onclick="setSelectMode('single')">
+                <svg width="22" height="22" viewBox="0 0 16 16">
+                    <polygon points="4,2 4,13 7,10 9,14 10.5,13.2 8.5,9.5 12,9.5" fill="#fff" stroke="#000" stroke-width="1"/>
+                </svg>
+            </button>
+            <button class="cad-icon-btn" id="selModeMulti" title="Multiple / Box Selection" onclick="setSelectMode('multi')">
+                <svg width="24" height="24" viewBox="0 0 18 18">
+                    <rect x="2" y="2" width="14" height="14" fill="none" stroke="#d06060" stroke-width="2"/>
+                    <polygon points="5,4 5,13 7.5,10.5 9.2,14 10.5,13.3 8.8,10 12,10" fill="#fff" stroke="#000" stroke-width="1"/>
+                </svg>
+            </button>
+            <button class="cad-icon-btn" id="selModeAll" title="Select All" onclick="setSelectMode('all')">
+                <svg width="24" height="24" viewBox="0 0 18 18">
+                    <rect x="3" y="3" width="8" height="8" fill="none" stroke="#d06060" stroke-width="1.5"/>
+                    <rect x="6" y="6" width="8" height="8" fill="none" stroke="#d06060" stroke-width="1.5"/>
+                    <polygon points="8,7 8,15 10.2,13 11.8,16 13,15.3 11.3,12.3 14,12.3" fill="#fff" stroke="#000" stroke-width="1"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="cad-tabs-header">
+            <button class="cad-tab-btn active" id="tabBtnTools">Tools</button>
+        </div>
+
+        <div class="cad-tab-box" id="tabContentTools">
+            <div class="tool-row" style="gap:6px;padding:4px;">
+                <button class="tool-btn highlight-rect" id="toolBtnRect" title="Add Rectangle" onclick="openAddRectModal()" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <rect x="3" y="4" width="12" height="10" fill="none" stroke="#000" stroke-width="1.3"/>
+                        <circle cx="3" cy="4" r="1.8" fill="#e00000"/>
+                        <circle cx="15" cy="14" r="1.8" fill="#e00000"/>
+                    </svg>
+                    <span>Rectangle</span>
+                </button>
+
+                <button class="tool-btn active" id="toolBtnMove" title="Move Tool" onclick="setActiveCadTool('move')" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <line x1="9" y1="2" x2="9" y2="16" stroke="#000" stroke-width="1.3"/>
+                        <line x1="2" y1="9" x2="16" y2="9" stroke="#000" stroke-width="1.3"/>
+                        <polygon points="9,1 6.5,4 11.5,4" fill="#000"/>
+                        <polygon points="9,17 6.5,14 11.5,14" fill="#000"/>
+                        <polygon points="1,9 4,6.5 4,11.5" fill="#000"/>
+                        <polygon points="17,9 14,6.5 14,11.5" fill="#000"/>
+                    </svg>
+                    <span>Move</span>
+                </button>
+
+                <button class="tool-btn" id="toolBtnTrim" title="Trim Tool" onclick="setActiveCadTool('trim')" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <circle cx="5" cy="13" r="2" fill="none" stroke="#000" stroke-width="1.1"/>
+                        <circle cx="9" cy="13" r="2" fill="none" stroke="#000" stroke-width="1.1"/>
+                        <line x1="5" y1="11" x2="11" y2="3" stroke="#000" stroke-width="1.2"/>
+                        <line x1="9" y1="11" x2="4" y2="3" stroke="#000" stroke-width="1.2"/>
+                        <line x1="14" y1="2" x2="14" y2="16" stroke="#e00000" stroke-width="1.5"/>
+                    </svg>
+                    <span>Trim</span>
+                </button>
+                
+                <button class="tool-btn" id="toolBtnMeasure" title="Measure Tool: Click 1st point, 2nd point, then click to place dimension" onclick="setActiveCadTool('measure')" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <line x1="2" y1="14" x2="2" y2="4" stroke="#ff0000" stroke-width="1.2"/>
+                        <line x1="16" y1="14" x2="16" y2="4" stroke="#ff0000" stroke-width="1.2"/>
+                        <line x1="2" y1="9" x2="16" y2="9" stroke="#ff0000" stroke-width="1.2"/>
+                        <polygon points="2,9 5,7 5,11" fill="#ff0000"/>
+                        <polygon points="16,9 13,7 13,11" fill="#ff0000"/>
+                    </svg>
+                    <span>Measure</span>
+                </button>
+                
+                <button class="tool-btn" id="toolBtnQuickMeasure" title="Quick Measure: Click any line to auto-measure it" onclick="setActiveCadTool('quickmeasure')" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <line x1="4" y1="14" x2="14" y2="14" stroke="#009900" stroke-width="2"/>
+                        <line x1="4" y1="10" x2="14" y2="10" stroke="#ff0000" stroke-width="1.2"/>
+                        <line x1="4" y1="8" x2="4" y2="12" stroke="#ff0000" stroke-width="1.2"/>
+                        <line x1="14" y1="8" x2="14" y2="12" stroke="#ff0000" stroke-width="1.2"/>
+                    </svg>
+                    <span>Quick Measure</span>
+                </button>
+                
+                <button class="tool-btn" id="toolBtnText" title="Text Tool" onclick="setActiveCadTool('text')" style="width:auto;padding:0 8px;gap:5px;">
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                        <text x="4" y="14" font-family="Tahoma, Arial" font-size="14" font-weight="bold" fill="#ff00ff">A</text>
+                    </svg>
+                    <span>Text</span>
+                </button>
+            </div>
+
+            <div style="padding:6px 4px;font-size:10.5px;color:#333;line-height:1.35;" id="toolsModeHint">
+                <b>Move Active:</b> Select any object or click and drag to pan the canvas view.
+            </div>
+
+            <div >
+                
+            </div>
+        </div>
+
+        <div class="prop-panel";style="padding:2px 4px;">
+            <div id="rectProps" style="display: flex; flex-direction: column; gap: 3px;">
+                <div class="prop-row">
+                    <label class="prop-label" for="propX1">X1</label>
+                    <input type="number" step="0.01" id="propX1" class="prop-input" value="0.000000">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propY1">Y1</label>
+                    <input type="number" step="0.01" id="propY1" class="prop-input" value="0.000000">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propX2">X2</label>
+                    <input type="number" step="0.01" id="propX2" class="prop-input" value="0.000000">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propY2">Y2</label>
+                    <input type="number" step="0.01" id="propY2" class="prop-input" value="0.000000">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+            </div>
+            
+            <div id="textProps" style="display: none; flex-direction: column; gap: 3px;">
+                <div class="prop-row" style="grid-template-columns: 52px 1fr;">
+                    <label class="prop-label" for="propTextContent">Text</label>
+                    <input type="text" id="propTextContent" class="prop-input">
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propTextSize">Height</label>
+                    <input type="number" step="0.1" id="propTextSize" class="prop-input">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propTextX">X</label>
+                    <input type="number" step="0.01" id="propTextX" class="prop-input">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+                <div class="prop-row">
+                    <label class="prop-label" for="propTextY">Y</label>
+                    <input type="number" step="0.01" id="propTextY" class="prop-input">
+                    <select class="prop-unit-select"><option>mm</option></select>
+                </div>
+            </div>
+        </div>
+
+        <div class="cad-ops-box">
+            <div style="font-size:10px;font-weight:bold;color:#333;text-transform:uppercase;border-bottom:1px solid #ccc;padding-bottom:2px;">
+                Exports
+            </div>
+            <div style="display:grid;gap:3px;margin-top:2px;">
+                <button class="win-btn" onclick="exportZeiFile()" style="font-weight:bold;color:#003380;" title="Download .zei CAD file">
+                    Export .ZEI
+                </button>
+            </div>
+            <button class="win-btn" onclick="exportCrystalClearA4PDF()" style="font-weight:bold;color:#8b0000;">
+                Export A4 PDF (Vector)
+            </button>
+        </div>
+
+        <div class="cad-ops-box" style="margin-top:6px;">
+            <div style="font-size:10px;font-weight:bold;color:#333;text-transform:uppercase;border-bottom:1px solid #ccc;padding-bottom:2px;">
+                View & Actions
+            </div>
+            <div style="display:flex;gap:3px;">
+                <button class="win-btn" style="flex:1;" onclick="zoomCamera(1.25)">Zoom +</button>
+                <button class="win-btn" style="flex:1;" onclick="zoomCamera(0.8)">Zoom -</button>
+                <button class="win-btn" style="flex:1;" onclick="fitViewToAll()">Fit View</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT WORKSPACE: CAD CANVAS -->
+    <div class="cad-workspace" id="workspaceContainer">
+
+        <canvas id="cadCanvas"></canvas>
+        <div class="canvas-status-bar">
+            <div id="statusLeft">
+                Origin (0,0): Bottom-Left | First Rectangle locked at X=0, Y=0
+            </div>
+            <div id="statusRight" style="font-family:monospace;">
+                X: 0.00 mm &nbsp; Y: 0.00 mm &nbsp;|&nbsp; Active Segments: <span id="segCountText">0</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 1: ADD RECTANGLE -->
+<div class="modal-backdrop" id="addRectModal">
+    <div class="win-dialog">
+        <div class="win-titlebar">
+            <span id="addRectModalTitle">Add Rectangle (mm)</span>
+            <button class="win-close-btn" onclick="closeAddRectModal()">&times;</button>
+        </div>
+        <div class="win-dialog-body">
+            <div style="margin-bottom:8px;font-size:11px;color:#222;" id="addRectNotice">
+                Enter Rectangle Width and Height (0.00 mm accuracy):
+            </div>
+            <div style="display:grid;grid-template-columns:95px 1fr 35px;gap:6px;align-items:center;margin-bottom:8px;">
+                <label for="modalRectW" style="font-weight:bold;">Width (X):</label>
+                <input type="number" id="modalRectW" step="0.01" value="500.00" class="prop-input" style="height:23px;font-size:12px;">
+                <span>mm</span>
+
+                <label for="modalRectH" style="font-weight:bold;">Height (Y):</label>
+                <input type="number" id="modalRectH" step="0.01" value="1000.00" class="prop-input" style="height:23px;font-size:12px;">
+                <span>mm</span>
+            </div>
+
+            <div id="modalPosSection" style="border-top:1px solid #ccc;padding-top:8px;margin-top:4px;">
+                <div style="font-size:10.5px;color:#444;margin-bottom:5px;" id="modalPosHint">
+                    Start Position X1, Y1:
+                </div>
+                <div style="display:grid;grid-template-columns:95px 1fr 35px;gap:6px;align-items:center;">
+                    <label for="modalRectX">Start X1:</label>
+                    <input type="number" id="modalRectX" step="0.01" value="0.00" class="prop-input" style="height:22px;">
+                    <span>mm</span>
+
+                    <label for="modalRectY">Start Y1:</label>
+                    <input type="number" id="modalRectY" step="0.01" value="0.00" class="prop-input" style="height:22px;">
+                    <span>mm</span>
+                </div>
+                <div id="quickPlaceBar" style="margin-top:7px;display:none;gap:4px;flex-wrap:wrap;">
+                    <span style="font-size:10px;color:#555;width:100%;">Quick Touching Placement:</span>
+                    <button type="button" class="win-btn" style="height:20px;font-size:10px;" onclick="setModalQuickTouch('right')">Touch Right</button>
+                    <button type="button" class="win-btn" style="height:20px;font-size:10px;" onclick="setModalQuickTouch('top')">Touch Top</button>
+                    <button type="button" class="win-btn" style="height:20px;font-size:10px;" onclick="setModalQuickTouch('origin')">At X0, Y0</button>
+                </div>
+            </div>
+
+            <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:14px;">
+                <button class="win-btn primary-green" style="min-width:75px;" onclick="confirmAddRectModal()">OK (Add)</button>
+                <button class="win-btn" style="min-width:65px;" onclick="closeAddRectModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 2: LIVE .ZEI FORMAT PREVIEW & COPY -->
+<div class="modal-backdrop" id="zeiPreviewModal">
+    <div class="win-dialog wide">
+        <div class="win-titlebar">
+            <span>.ZEI File Format Output (V6.3.2 - 15 Decimal Precision)</span>
+            <button class="win-close-btn" onclick="closeZeiPreviewModal()">&times;</button>
+        </div>
+        <div class="win-dialog-body">
+            <textarea id="zeiPreviewTextarea" readonly style="width:100%;height:280px;font-family:Consolas,monospace;font-size:11.5px;border:1px solid #7f9db9;padding:6px;white-space:pre;background:#fff;"></textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+                <span id="zeiCopyFeedback" style="color:#007800;font-weight:bold;"></span>
+                <div style="display:flex;gap:6px;">
+                    <button class="win-btn" onclick="copyZeiPreviewText()">Copy Text</button>
+                    <button class="win-btn primary-green" onclick="exportZeiFile()">Download .ZEI File</button>
+                    <button class="win-btn" onclick="closeZeiPreviewModal()">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL 3: ADD TEXT -->
+<div class="modal-backdrop" id="addTextModal">
+    <div class="win-dialog">
+        <div class="win-titlebar">
+            <span>Add Text</span>
+            <button class="win-close-btn" onclick="closeAddTextModal()">&times;</button>
+        </div>
+        <div class="win-dialog-body">
+            <div style="margin-bottom:8px;font-size:11px;color:#222;">
+                Enter text and height:
+            </div>
+            <div style="display:grid;grid-template-columns:50px 1fr;gap:6px;align-items:center;margin-bottom:8px;">
+                <label for="modalTextInput" style="font-weight:bold;">Text:</label>
+                <textarea id="modalTextInput" class="prop-input" style="height:55px;font-size:12px;resize:vertical;padding:4px;"></textarea>
+
+                <label for="modalTextSize" style="font-weight:bold;">Height:</label>
+                <div style="display:flex; gap: 4px; align-items: center;">
+                    <input type="number" id="modalTextSize" step="0.1" value="12.0" class="prop-input" style="height:23px;font-size:12px;width:80px;">
+                    <span>mm</span>
+                </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:14px;">
+                <button class="win-btn primary-green" style="min-width:75px;" onclick="confirmAddTextModal()">OK (Add)</button>
+                <button class="win-btn" style="min-width:65px;" onclick="closeAddTextModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // State
+    let rectangles = [];
+    let nextRectId = 1;
+    let selectedRectIds = new Set();
+    let selectMode = 'single';
+    let selectedDimIndices = new Set();
+    
+    let texts = [];
+    let nextTextId = 1;
+    let selectedTextIds = new Set();
+    let textInsertPt = null;
+
+    let dimensions = [];
+    let measureStep = 0;
+    let measurePt1 = null;
+    let measurePt2 = null;
+    let measureSnapPt = null;
+    let measuringOffsetPt = null;
+
+    let activeCadTool = 'move';
+    let activeSegments = [];
+    let hoveredTrimSeg = null;
+    let trimHistory = [];
+
+    let camera = { cx: 250, cy: 500, scale: 0.45 };
+
+    let isPanningCanvas = false;
+    let panStartScreen = { x: 0, y: 0 };
+    let panCameraInitial = { cx: 0, cy: 0 };
+
+    let isBoxSelecting = false;
+    let boxSelectStart = {x: 0, y: 0};
+    let boxSelectCurrent = {x: 0, y: 0};
+    let hasDragged = false;
+    let pickedIdOnDown = null;
+    let wasSelectedOnDown = false;
+    
+    // Text Dragging
+    let isDraggingText = false;
+    let dragTextStart = { x: 0, y: 0 };
+    let dragTextsInitial = [];
+
+    const canvas = document.getElementById('cadCanvas');
+    const ctx = canvas.getContext('2d');
+    const workspaceContainer = document.getElementById('workspaceContainer');
+
+    const propX1 = document.getElementById('propX1');
+    const propY1 = document.getElementById('propY1');
+    const propX2 = document.getElementById('propX2');
+    const propY2 = document.getElementById('propY2');
+    
+    const rectProps = document.getElementById('rectProps');
+    const textProps = document.getElementById('textProps');
+    const propTextContent = document.getElementById('propTextContent');
+    const propTextSize = document.getElementById('propTextSize');
+    const propTextX = document.getElementById('propTextX');
+    const propTextY = document.getElementById('propTextY');
+
+    function initApp() {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        propX1.addEventListener('change', onPropX1Y1Changed);
+        propY1.addEventListener('change', onPropX1Y1Changed);
+        propX2.addEventListener('change', onPropX2Y2Changed);
+        propY2.addEventListener('change', onPropX2Y2Changed);
+
+        propTextContent.addEventListener('input', onPropTextChanged);
+        propTextSize.addEventListener('change', onPropTextChanged);
+        propTextX.addEventListener('change', onPropTextChanged);
+        propTextY.addEventListener('change', onPropTextChanged);
+
+        canvas.addEventListener('mousedown', onCanvasMouseDown);
+        window.addEventListener('mousemove', onCanvasMouseMove);
+        window.addEventListener('mouseup', onCanvasMouseUp);
+        canvas.addEventListener('wheel', onCanvasWheel, { passive: false });
+        canvas.addEventListener('dblclick', () => openAddRectModal());
+
+        window.addEventListener('keydown', onWindowKeyDown);
+
+        ['modalRectW', 'modalRectH', 'modalRectX', 'modalRectY'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') confirmAddRectModal();
+                    if (e.key === 'Escape') closeAddRectModal();
+                });
+            }
+        });
+        
+        ['modalTextInput', 'modalTextSize'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        if (id === 'modalTextInput' && !e.ctrlKey) return; 
+                        e.preventDefault();
+                        confirmAddTextModal();
+                    }
+                    if (e.key === 'Escape') closeAddTextModal();
+                });
+            }
+        });
+
+        recomputeSegments();
+        fitViewToAll();
+        syncInspector();
+    }
+
+    function syncInspector() {
+        if (selectedTextIds.size === 1 && selectedRectIds.size === 0 && selectedDimIndices.size === 0) {
+            rectProps.style.display = 'none';
+            textProps.style.display = 'flex';
+            const selText = texts.find(t => t.id === Array.from(selectedTextIds)[0]);
+            if (selText) {
+                propTextContent.value = selText.text;
+                propTextSize.value = selText.size.toFixed(2);
+                propTextX.value = selText.x.toFixed(6);
+                propTextY.value = selText.y.toFixed(6);
+            }
+        } else if (selectedRectIds.size === 1 && selectedDimIndices.size === 0 && selectedTextIds.size === 0) {
+            rectProps.style.display = 'flex';
+            textProps.style.display = 'none';
+            const selRect = rectangles.find(r => r.id === Array.from(selectedRectIds)[0]);
+            if (selRect) {
+                propX1.value = selRect.x.toFixed(6);
+                propY1.value = selRect.y.toFixed(6);
+                propX2.value = (selRect.x + selRect.w).toFixed(6);
+                propY2.value = (selRect.y + selRect.h).toFixed(6);
+                
+                propX1.readOnly = selRect.lockedOrigin;
+                propY1.readOnly = selRect.lockedOrigin;
+                propX2.readOnly = false;
+                propY2.readOnly = false;
+            }
+        } else {
+            rectProps.style.display = 'flex';
+            textProps.style.display = 'none';
+            propX1.value = '0.000000';
+            propY1.value = '0.000000';
+            propX2.value = '0.000000';
+            propY2.value = '0.000000';
+            propX1.readOnly = true;
+            propY1.readOnly = true;
+            propX2.readOnly = true;
+            propY2.readOnly = true;
+        }
+    }
+    
+    function onPropTextChanged() {
+        if (selectedTextIds.size !== 1) return;
+        const selText = texts.find(t => t.id === Array.from(selectedTextIds)[0]);
+        if (selText) {
+            selText.text = propTextContent.value;
+            selText.size = cleanNum(parseFloat(propTextSize.value) || 12.0);
+            selText.x = cleanNum(parseFloat(propTextX.value) || 0);
+            selText.y = cleanNum(parseFloat(propTextY.value) || 0);
+            drawCanvas();
+        }
+    }
+
+    function onPropX1Y1Changed() {
+        if (selectedRectIds.size !== 1) return;
+        const selRect = rectangles.find(r => r.id === Array.from(selectedRectIds)[0]);
+        if (selRect && !selRect.lockedOrigin) {
+            const nx = cleanNum(parseFloat(propX1.value) || 0);
+            const ny = cleanNum(parseFloat(propY1.value) || 0);
+            selRect.x = nx;
+            selRect.y = ny;
+            recomputeAndDraw();
+            syncInspector();
+        }
+    }
+
+    function onPropX2Y2Changed() {
+        if (selectedRectIds.size !== 1) return;
+        const selRect = rectangles.find(r => r.id === Array.from(selectedRectIds)[0]);
+        if (selRect) {
+            const nx2 = cleanNum(parseFloat(propX2.value) || selRect.x);
+            const ny2 = cleanNum(parseFloat(propY2.value) || selRect.y);
+            if (nx2 > selRect.x) selRect.w = cleanNum(nx2 - selRect.x);
+            if (ny2 > selRect.y) selRect.h = cleanNum(ny2 - selRect.y);
+            recomputeAndDraw();
+            syncInspector();
+        }
+    }
+
+    function cleanNum(val) {
+        return Math.round((Number(val) || 0) * 1000000) / 1000000;
+    }
+
+    function formatZei15(val) {
+        const cleaned = cleanNum(val);
+        return cleaned.toFixed(6) + '000000000';
+    }
+
+    function ensureTrimmedStruct(r) {
+        if (!r.trimmed) {
+            r.trimmed = { bottom: [], left: [], top: [], right: [] };
+        }
+    }
+
+    function getUntrimmedIntervals(totalLength, trimmedList) {
+        const eps = 1e-4;
+        let spans = [[0, cleanNum(totalLength)]];
+        if (!trimmedList || trimmedList.length === 0) return spans;
+
+        trimmedList.forEach(([cutStart, cutEnd]) => {
+            const c1 = Math.min(cutStart, cutEnd);
+            const c2 = Math.max(cutStart, cutEnd);
+            if (c2 - c1 <= eps) return;
+            const nextSpans = [];
+            spans.forEach(([a, b]) => {
+                if (c2 <= a + eps || c1 >= b - eps) {
+                    nextSpans.push([a, b]);
+                } else {
+                    if (c1 > a + eps) nextSpans.push([a, cleanNum(c1)]);
+                    if (c2 < b - eps) nextSpans.push([cleanNum(c2), b]);
+                }
+            });
+            spans = nextSpans;
+        });
+
+        return spans.filter(([a, b]) => (b - a) > eps);
+    }
+
+    function recomputeSegments() {
+        if (rectangles.length === 0) {
+            activeSegments = [];
+            hoveredTrimSeg = null;
+            document.getElementById('segCountText').textContent = '0';
+            return;
+        }
+
+        const eps = 1e-4;
+        const rawSpans = [];
+
+        rectangles.forEach(r => {
+            ensureTrimmedStruct(r);
+            const x1 = cleanNum(r.x);
+            const y1 = cleanNum(r.y);
+            const x2 = cleanNum(r.x + r.w);
+            const y2 = cleanNum(r.y + r.h);
+
+            getUntrimmedIntervals(r.w, r.trimmed.bottom).forEach(([t1, t2]) => {
+                rawSpans.push({
+                    rectId: r.id, edge: 'bottom', orient: 'H',
+                    fixed: y1, start: cleanNum(x1 + t1), end: cleanNum(x1 + t2),
+                    base: x1, reverseDir: false
+                });
+            });
+
+            getUntrimmedIntervals(r.h, r.trimmed.left).forEach(([t1, t2]) => {
+                rawSpans.push({
+                    rectId: r.id, edge: 'left', orient: 'V',
+                    fixed: x1, start: cleanNum(y1 + t1), end: cleanNum(y1 + t2),
+                    base: y1, reverseDir: false
+                });
+            });
+
+            getUntrimmedIntervals(r.w, r.trimmed.top).forEach(([t1, t2]) => {
+                rawSpans.push({
+                    rectId: r.id, edge: 'top', orient: 'H',
+                    fixed: y2, start: cleanNum(x1 + t1), end: cleanNum(x1 + t2),
+                    base: x1, reverseDir: false
+                });
+            });
+
+            getUntrimmedIntervals(r.h, r.trimmed.right).forEach(([t1, t2]) => {
+                rawSpans.push({
+                    rectId: r.id, edge: 'right', orient: 'V',
+                    fixed: x2, start: cleanNum(y1 + t1), end: cleanNum(y1 + t2),
+                    base: y1, reverseDir: true
+                });
+            });
+        });
+
+        const atomicSegs = [];
+
+        rawSpans.forEach((span, idx) => {
+            const splitPts = [span.start, span.end];
+
+            rawSpans.forEach((other, oIdx) => {
+                if (idx === oIdx) return;
+                if (span.orient !== other.orient) {
+                    const crossCoord = other.fixed;
+                    if (crossCoord > span.start + eps && crossCoord < span.end - eps) {
+                        if (span.fixed >= other.start - eps && span.fixed <= other.end + eps) {
+                            splitPts.push(cleanNum(crossCoord));
+                        }
+                    }
+                } else {
+                    if (Math.abs(span.fixed - other.fixed) <= eps) {
+                        if (other.start > span.start + eps && other.start < span.end - eps) {
+                            splitPts.push(cleanNum(other.start));
+                        }
+                        if (other.end > span.start + eps && other.end < span.end - eps) {
+                            splitPts.push(cleanNum(other.end));
+                        }
+                    }
+                }
+            });
+
+            splitPts.sort((a, b) => a - b);
+            const uniquePts = [];
+            splitPts.forEach(p => {
+                if (uniquePts.length === 0 || Math.abs(p - uniquePts[uniquePts.length - 1]) > eps) {
+                    uniquePts.push(p);
+                }
+            });
+
+            for (let i = 0; i < uniquePts.length - 1; i++) {
+                const c1 = uniquePts[i];
+                const c2 = uniquePts[i + 1];
+                if (c2 - c1 <= eps) continue;
+
+                const t1 = cleanNum(c1 - span.base);
+                const t2 = cleanNum(c2 - span.base);
+
+                if (span.orient === 'H') {
+                    atomicSegs.push({
+                        orient: 'H', fixed: span.fixed, cMin: c1, cMax: c2,
+                        x1: c1, y1: span.fixed, x2: c2, y2: span.fixed,
+                        source: { rectId: span.rectId, edge: span.edge, t1: t1, t2: t2 }
+                    });
+                } else {
+                    atomicSegs.push({
+                        orient: 'V', fixed: span.fixed, cMin: c1, cMax: c2,
+                        x1: span.fixed,
+                        y1: span.reverseDir ? c2 : c1,
+                        x2: span.fixed,
+                        y2: span.reverseDir ? c1 : c2,
+                        source: { rectId: span.rectId, edge: span.edge, t1: t1, t2: t2 }
+                    });
+                }
+            }
+        });
+
+        const segMap = new Map();
+        const deduped = [];
+
+        atomicSegs.forEach(seg => {
+            const key = `${seg.orient}:${seg.fixed.toFixed(4)}:${seg.cMin.toFixed(4)}:${seg.cMax.toFixed(4)}`;
+            if (segMap.has(key)) {
+                segMap.get(key).sources.push(seg.source);
+            } else {
+                const entry = {
+                    key: key, orient: seg.orient, fixed: seg.fixed,
+                    cMin: seg.cMin, cMax: seg.cMax,
+                    x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2,
+                    sources: [seg.source]
+                };
+                segMap.set(key, entry);
+                deduped.push(entry);
+            }
+        });
+
+        activeSegments = deduped;
+        if (hoveredTrimSeg) {
+            hoveredTrimSeg = activeSegments.find(s => s.key === hoveredTrimSeg.key) || null;
+        }
+        document.getElementById('segCountText').textContent = String(getMergedExportSegments().length);
+    }
+
+    function getMergedExportSegments() {
+        if (activeSegments.length === 0) return [];
+
+        if (rectangles.length === 1) {
+            const r = rectangles[0];
+            ensureTrimmedStruct(r);
+            const hasTrims =
+                r.trimmed.bottom.length > 0 ||
+                r.trimmed.left.length > 0 ||
+                r.trimmed.top.length > 0 ||
+                r.trimmed.right.length > 0;
+            if (!hasTrims) {
+                return activeSegments.map(s => ({ x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 }));
+            }
+        }
+
+        const eps = 1e-4;
+        const hSegs = activeSegments.filter(s => s.orient === 'H');
+        const vSegs = activeSegments.filter(s => s.orient === 'V');
+
+        const hasPerpAt = (x, y, orient) => {
+            const perpList = (orient === 'H') ? vSegs : hSegs;
+            for (let i = 0; i < perpList.length; i++) {
+                const p = perpList[i];
+                if (orient === 'H') {
+                    if (Math.abs(p.fixed - x) <= eps && y >= p.cMin - eps && y <= p.cMax + eps) return true;
+                } else {
+                    if (Math.abs(p.fixed - y) <= eps && x >= p.cMin - eps && x <= p.cMax + eps) return true;
+                }
+            }
+            return false;
+        };
+
+        const merged = [];
+
+        const hGroups = new Map();
+        hSegs.forEach(s => {
+            const yKey = s.fixed.toFixed(4);
+            if (!hGroups.has(yKey)) hGroups.set(yKey, []);
+            hGroups.get(yKey).push(s);
+        });
+
+        hGroups.forEach(list => {
+            list.sort((a, b) => a.cMin - b.cMin);
+            let cur = { x1: list[0].cMin, y1: list[0].fixed, x2: list[0].cMax, y2: list[0].fixed };
+            for (let i = 1; i < list.length; i++) {
+                const nxt = list[i];
+                if (Math.abs(nxt.cMin - cur.x2) <= eps && !hasPerpAt(cur.x2, cur.y1, 'H')) {
+                    cur.x2 = nxt.cMax;
+                } else {
+                    merged.push(cur);
+                    cur = { x1: nxt.cMin, y1: nxt.fixed, x2: nxt.cMax, y2: nxt.fixed };
+                }
+            }
+            merged.push(cur);
+        });
+
+        const vGroups = new Map();
+        vSegs.forEach(s => {
+            const xKey = s.fixed.toFixed(4);
+            if (!vGroups.has(xKey)) vGroups.set(xKey, []);
+            vGroups.get(xKey).push(s);
+        });
+
+        vGroups.forEach(list => {
+            list.sort((a, b) => a.cMin - b.cMin);
+            let cur = {
+                x1: list[0].fixed, y1: list[0].cMin,
+                x2: list[0].fixed, y2: list[0].cMax,
+                rev: (list[0].y1 > list[0].y2)
+            };
+            for (let i = 1; i < list.length; i++) {
+                const nxt = list[i];
+                if (Math.abs(nxt.cMin - cur.y2) <= eps && !hasPerpAt(cur.x1, cur.y2, 'V')) {
+                    cur.y2 = nxt.cMax;
+                } else {
+                    merged.push(cur.rev
+                        ? { x1: cur.x1, y1: cur.y2, x2: cur.x2, y2: cur.y1 }
+                        : { x1: cur.x1, y1: cur.y1, x2: cur.x2, y2: cur.y2 }
+                    );
+                    cur = {
+                        x1: nxt.fixed, y1: nxt.cMin,
+                        x2: nxt.fixed, y2: nxt.cMax,
+                        rev: (nxt.y1 > nxt.y2)
+                    };
+                }
+            }
+            merged.push(cur.rev
+                ? { x1: cur.x1, y1: cur.y2, x2: cur.x2, y2: cur.y1 }
+                : { x1: cur.x1, y1: cur.y1, x2: cur.x2, y2: cur.y2 }
+            );
+        });
+
+        return merged;
+    }
+
+    function saveTrimSnapshot() {
+        const snap = rectangles.map(r => ({
+            id: r.id,
+            trimmed: {
+                bottom: r.trimmed.bottom.map(iv => [...iv]),
+                left: r.trimmed.left.map(iv => [...iv]),
+                top: r.trimmed.top.map(iv => [...iv]),
+                right: r.trimmed.right.map(iv => [...iv])
+            }
+        }));
+        trimHistory.push(snap);
+        if (trimHistory.length > 50) trimHistory.shift();
+    }
+
+    function trimSegment(seg) {
+        if (!seg || !seg.sources) return;
+        saveTrimSnapshot();
+
+        seg.sources.forEach(src => {
+            const rect = rectangles.find(r => r.id === src.rectId);
+            if (rect) {
+                ensureTrimmedStruct(rect);
+                rect.trimmed[src.edge].push([src.t1, src.t2]);
+            }
+        });
+
+        hoveredTrimSeg = null;
+        recomputeSegments();
+        drawCanvas();
+        document.getElementById('statusLeft').textContent =
+            `Trimmed line (${seg.x1.toFixed(2)}, ${seg.y1.toFixed(2)}) -> (${seg.x2.toFixed(2)}, ${seg.y2.toFixed(2)}) | Press Ctrl+Z to Undo`;
+    }
+
+    function undoLastTrim() {
+        if (trimHistory.length === 0) return;
+        const lastSnap = trimHistory.pop();
+        lastSnap.forEach(saved => {
+            const rect = rectangles.find(r => r.id === saved.id);
+            if (rect) rect.trimmed = saved.trimmed;
+        });
+        hoveredTrimSeg = null;
+        recomputeSegments();
+        drawCanvas();
+        document.getElementById('statusLeft').textContent = 'Undid last Trim action.';
+    }
+
+    function getSnapPoint(sx, sy) {
+        const worldPt = screenToWorld(sx, sy);
+        let bestDist = 15 / camera.scale;
+        let bestPt = { x: worldPt.x, y: worldPt.y, snapped: false };
+
+        rectangles.forEach(r => {
+            const corners = [
+                {x: r.x, y: r.y}, {x: r.x + r.w, y: r.y},
+                {x: r.x, y: r.y + r.h}, {x: r.x + r.w, y: r.y + r.h}
+            ];
+            corners.forEach(c => {
+                const d = Math.hypot(c.x - worldPt.x, c.y - worldPt.y);
+                if (d < bestDist) {
+                    bestDist = d;
+                    bestPt = { x: c.x, y: c.y, snapped: true };
+                }
+            });
+        });
+
+        if (!bestPt.snapped) {
+            let bestSeg = findClosestSegAtScreen(sx, sy, 10);
+            if (bestSeg) {
+                const dx = bestSeg.x2 - bestSeg.x1;
+                const dy = bestSeg.y2 - bestSeg.y1;
+                const lenSq = dx * dx + dy * dy;
+                if (lenSq > 0) {
+                    let t = ((worldPt.x - bestSeg.x1) * dx + (worldPt.y - bestSeg.y1) * dy) / lenSq;
+                    t = Math.max(0, Math.min(1, t));
+                    bestPt = { 
+                        x: bestSeg.x1 + t * dx, 
+                        y: bestSeg.y1 + t * dy, 
+                        snapped: true 
+                    };
+                }
+            }
+        }
+        return bestPt;
+    }
+
+    function distPointToSegScreen(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+        let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const projX = x1 + t * dx;
+        const projY = y1 + t * dy;
+        return Math.hypot(px - projX, py - projY);
+    }
+
+    function findClosestSegAtScreen(sx, sy, maxDistPx = 9) {
+        let bestSeg = null;
+        let bestDist = maxDistPx;
+        activeSegments.forEach(seg => {
+            const p1 = worldToScreen(seg.x1, seg.y1);
+            const p2 = worldToScreen(seg.x2, seg.y2);
+            const d = distPointToSegScreen(sx, sy, p1.x, p1.y, p2.x, p2.y);
+            if (d < bestDist) {
+                bestDist = d;
+                bestSeg = seg;
+            }
+        });
+        return bestSeg;
+    }
+
+    function findClosestDimAtScreen(sx, sy, maxDistPx = 9) {
+        let bestDim = null;
+        let bestDist = maxDistPx;
+        let bestIdx = null;
+        dimensions.forEach((dim, idx) => {
+            const s1 = worldToScreen(dim.pt1.x, dim.pt1.y);
+            const s2 = worldToScreen(dim.pt2.x, dim.pt2.y);
+            const m = worldToScreen(dim.offset.x, dim.offset.y);
+            
+            let d = maxDistPx;
+            if (dim.orient === 'H') {
+                d = distPointToSegScreen(sx, sy, s1.x, m.y, s2.x, m.y);
+            } else {
+                d = distPointToSegScreen(sx, sy, m.x, s1.y, m.x, s2.y);
+            }
+            
+            if (d < bestDist) {
+                bestDist = d;
+                bestDim = dim;
+                bestIdx = idx;
+            }
+        });
+        return { dim: bestDim, idx: bestIdx };
+    }
+
+    function findClosestTextAtScreen(sx, sy, maxDistPx = 15) {
+        let bestText = null;
+        texts.forEach(t => {
+            const sc = worldToScreen(t.x, t.y);
+            const scaledSize = t.size * camera.scale;
+            ctx.font = `bold ${scaledSize}px Tahoma`;
+            const tw = ctx.measureText(t.text).width;
+            if (sx >= sc.x && sx <= sc.x + tw && sy <= sc.y && sy >= sc.y - scaledSize) {
+                bestText = t;
+            }
+        });
+        return bestText;
+    }
+
+    function recomputeAndDraw() {
+        recomputeSegments();
+        drawCanvas();
+    }
+
+    function resizeCanvas() {
+        canvas.width = workspaceContainer.clientWidth;
+        canvas.height = workspaceContainer.clientHeight - 22;
+        drawCanvas();
+    }
+
+    function worldToScreen(wx, wy) {
+        return {
+            x: canvas.width / 2 + (wx - camera.cx) * camera.scale,
+            y: canvas.height / 2 - (wy - camera.cy) * camera.scale
+        };
+    }
+
+    function screenToWorld(sx, sy) {
+        return {
+            x: camera.cx + (sx - canvas.width / 2) / camera.scale,
+            y: camera.cy - (sy - canvas.height / 2) / camera.scale
+        };
+    }
+
+    function fitViewToAll() {
+        if (rectangles.length === 0) {
+            camera.cx = 250;
+            camera.cy = 500;
+            camera.scale = 0.4;
+            drawCanvas();
+            return;
+        }
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        rectangles.forEach(r => {
+            minX = Math.min(minX, r.x);
+            minY = Math.min(minY, r.y);
+            maxX = Math.max(maxX, r.x + r.w);
+            maxY = Math.max(maxY, r.y + r.h);
+        });
+
+        const partW = Math.max(maxX - minX, 10);
+        const partH = Math.max(maxY - minY, 10);
+
+        camera.cx = minX + partW / 2;
+        camera.cy = minY + partH / 2;
+
+        const pad = 90;
+        const availW = Math.max(canvas.width - pad * 2, 100);
+        const availH = Math.max(canvas.height - pad * 2, 100);
+
+        camera.scale = Math.min(availW / partW, availH / partH);
+        drawCanvas();
+    }
+
+    function zoomCamera(factor) {
+        camera.scale = Math.max(0.02, Math.min(20, camera.scale * factor));
+        drawCanvas();
+    }
+
+    function drawCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.setLineDash([]);
+        ctx.strokeStyle = '#009900';
+        ctx.lineWidth = 1.3;
+        ctx.lineCap = 'square';
+
+        activeSegments.forEach(seg => {
+            const s1 = worldToScreen(seg.x1, seg.y1);
+            const s2 = worldToScreen(seg.x2, seg.y2);
+            ctx.beginPath();
+            ctx.moveTo(Math.round(s1.x) + 0.5, Math.round(s1.y) + 0.5);
+            ctx.lineTo(Math.round(s2.x) + 0.5, Math.round(s2.y) + 0.5);
+            ctx.stroke();
+        });
+        ctx.restore();
+
+        texts.forEach(t => {
+            const sc = worldToScreen(t.x, t.y);
+            const scaledSize = Math.max(8, t.size * camera.scale);
+            ctx.font = `bold ${scaledSize}px Tahoma`;
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+            ctx.fillStyle = selectedTextIds.has(t.id) ? '#0066cc' : '#ff00ff';
+            ctx.fillText(t.text, sc.x, sc.y);
+
+            if (selectedTextIds.has(t.id)) {
+                const tw = ctx.measureText(t.text).width;
+                ctx.save();
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = '#0066cc';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(sc.x - 2, sc.y - scaledSize - 2, tw + 4, scaledSize + 4);
+                ctx.restore();
+            }
+        });
+
+        dimensions.forEach((dim, idx) => drawDimension(dim, false, selectedDimIndices.has(idx)));
+
+        // Live Measure & Quick Measure Previews
+        if (activeCadTool === 'measure' || activeCadTool === 'quickmeasure') {
+            if (measureSnapPt && activeCadTool === 'measure') {
+                const scPt = worldToScreen(measureSnapPt.x, measureSnapPt.y);
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(scPt.x, scPt.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            if (measureStep === 1 && measurePt1 && measureSnapPt && activeCadTool === 'measure') {
+                const p1 = worldToScreen(measurePt1.x, measurePt1.y);
+                const p2 = worldToScreen(measureSnapPt.x, measureSnapPt.y);
+                ctx.save();
+                ctx.setLineDash([4, 4]);
+                ctx.strokeStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.moveTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y);
+                ctx.stroke();
+                ctx.restore();
+            } else if (measureStep === 2 && measurePt1 && measurePt2 && measuringOffsetPt) {
+                let orient = 'H';
+                if (activeCadTool === 'quickmeasure') {
+                    orient = Math.abs(measurePt1.y - measurePt2.y) < 0.001 ? 'H' : 'V';
+                } else {
+                    const dx = Math.abs(measuringOffsetPt.x - (measurePt1.x + measurePt2.x) / 2);
+                    const dy = Math.abs(measuringOffsetPt.y - (measurePt1.y + measurePt2.y) / 2);
+                    orient = (dy > dx) ? 'H' : 'V';
+                }
+                
+                drawDimension({
+                    orient: orient,
+                    pt1: measurePt1,
+                    pt2: measurePt2,
+                    offset: measuringOffsetPt
+                }, true, false);
+            }
+        }
+
+        // Draw Hover Highlight for Trim (Red) and Quick Measure (Blue)
+        if ((activeCadTool === 'trim' || activeCadTool === 'quickmeasure') && hoveredTrimSeg) {
+            const h1 = worldToScreen(hoveredTrimSeg.x1, hoveredTrimSeg.y1);
+            const h2 = worldToScreen(hoveredTrimSeg.x2, hoveredTrimSeg.y2);
+            ctx.save();
+            ctx.setLineDash([]);
+            
+            const highlightColor = (activeCadTool === 'quickmeasure') ? '#0066cc' : '#ff0000';
+            ctx.strokeStyle = highlightColor;
+            ctx.lineWidth = 2.4;
+            ctx.beginPath();
+            ctx.moveTo(Math.round(h1.x) + 0.5, Math.round(h1.y) + 0.5);
+            ctx.lineTo(Math.round(h2.x) + 0.5, Math.round(h2.y) + 0.5);
+            ctx.stroke();
+
+            ctx.fillStyle = highlightColor;
+            ctx.fillRect(Math.round(h1.x) - 2.5, Math.round(h1.y) - 2.5, 5, 5);
+            ctx.fillRect(Math.round(h2.x) - 2.5, Math.round(h2.y) - 2.5, 5, 5);
+            ctx.restore();
+        }
+
+        if (activeCadTool !== 'trim') {
+            ctx.save();
+            ctx.setLineDash([]);
+            ctx.strokeStyle = '#000000';
+            ctx.fillStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            selectedRectIds.forEach(id => {
+                const selRect = rectangles.find(r => r.id === id);
+                if (selRect) {
+                    const corners = [
+                        worldToScreen(selRect.x, selRect.y),
+                        worldToScreen(selRect.x + selRect.w, selRect.y),
+                        worldToScreen(selRect.x + selRect.w, selRect.y + selRect.h),
+                        worldToScreen(selRect.x, selRect.y + selRect.h)
+                    ];
+                    corners.forEach(pt => {
+                        ctx.fillRect(Math.round(pt.x) - 2.5, Math.round(pt.y) - 2.5, 5, 5);
+                        ctx.strokeRect(Math.round(pt.x) - 2.5, Math.round(pt.y) - 2.5, 5, 5);
+                    });
+                }
+            });
+            ctx.restore();
+        }
+        
+        if (isBoxSelecting) {
+            const p1 = worldToScreen(boxSelectStart.x, boxSelectStart.y);
+            const p2 = worldToScreen(boxSelectCurrent.x, boxSelectCurrent.y);
+            ctx.save();
+            ctx.setLineDash([4, 4]);
+            ctx.strokeStyle = '#0066cc';
+            ctx.fillStyle = 'rgba(0, 102, 204, 0.1)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.rect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
+            ctx.fill();
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+
+    function drawDimension(dim, isLive = false, isSelected = false) {
+        ctx.save();
+        const color = isSelected ? '#0066cc' : '#ff0000';
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        ctx.lineWidth = isSelected ? 1.5 : 1;
+        ctx.setLineDash([]);
+        ctx.font = isSelected ? 'bold 11px Tahoma' : '11px Tahoma';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        const s1 = worldToScreen(dim.pt1.x, dim.pt1.y);
+        const s2 = worldToScreen(dim.pt2.x, dim.pt2.y);
+        const mouseSc = worldToScreen(dim.offset.x, dim.offset.y);
+
+        if (dim.orient === 'H') {
+            const lineY = mouseSc.y;
+            ctx.beginPath();
+            ctx.moveTo(s1.x, s1.y); ctx.lineTo(s1.x, lineY);
+            ctx.moveTo(s2.x, s2.y); ctx.lineTo(s2.x, lineY);
+            ctx.moveTo(s1.x, lineY); ctx.lineTo(s2.x, lineY);
+            ctx.stroke();
+            
+            const dirH = Math.sign(s2.x - s1.x) || 1;
+            ctx.beginPath(); ctx.moveTo(s1.x, lineY); ctx.lineTo(s1.x + 6 * dirH, lineY - 3); ctx.lineTo(s1.x + 6 * dirH, lineY + 3); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(s2.x, lineY); ctx.lineTo(s2.x - 6 * dirH, lineY - 3); ctx.lineTo(s2.x - 6 * dirH, lineY + 3); ctx.fill();
+
+            const val = Math.abs(dim.pt2.x - dim.pt1.x).toFixed(2);
+            const tw = ctx.measureText(val).width;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect((s1.x + s2.x)/2 - tw/2 - 2, lineY - 7, tw + 4, 14);
+            ctx.fillStyle = color;
+            ctx.fillText(val, (s1.x + s2.x)/2, lineY);
+        } else {
+            const lineX = mouseSc.x;
+            ctx.beginPath();
+            ctx.moveTo(s1.x, s1.y); ctx.lineTo(lineX, s1.y);
+            ctx.moveTo(s2.x, s2.y); ctx.lineTo(lineX, s2.y);
+            ctx.moveTo(lineX, s1.y); ctx.lineTo(lineX, s2.y);
+            ctx.stroke();
+
+            const dirV = Math.sign(s2.y - s1.y) || 1;
+            ctx.beginPath(); ctx.moveTo(lineX, s1.y); ctx.lineTo(lineX - 3, s1.y + 6 * dirV); ctx.lineTo(lineX + 3, s1.y + 6 * dirV); ctx.fill();
+            ctx.beginPath(); ctx.moveTo(lineX, s2.y); ctx.lineTo(lineX - 3, s2.y - 6 * dirV); ctx.lineTo(lineX + 3, s2.y - 6 * dirV); ctx.fill();
+
+            ctx.save();
+            const val = Math.abs(dim.pt2.y - dim.pt1.y).toFixed(2);
+            ctx.translate(lineX, (s1.y + s2.y)/2);
+            ctx.rotate(-Math.PI/2);
+            const tw = ctx.measureText(val).width;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(-tw/2 - 2, -7, tw + 4, 14);
+            ctx.fillStyle = color;
+            ctx.fillText(val, 0, 0);
+            ctx.restore();
+        }
+        ctx.restore();
+    }
+
+    function onCanvasMouseDown(e) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const worldPt = screenToWorld(sx, sy);
+
+        if (e.button === 1 || e.shiftKey) {
+            isPanningCanvas = true;
+            panStartScreen = { x: sx, y: sy };
+            panCameraInitial = { cx: camera.cx, cy: camera.cy };
+            canvas.style.cursor = 'grabbing';
+            return;
+        }
+
+        if (activeCadTool === 'text') {
+            textInsertPt = worldPt;
+            openAddTextModal();
+            return;
+        }
+
+        if (activeCadTool === 'quickmeasure') {
+            if (measureStep === 0) {
+                const seg = findClosestSegAtScreen(sx, sy, 10);
+                if (seg) {
+                    measurePt1 = { x: seg.x1, y: seg.y1 };
+                    measurePt2 = { x: seg.x2, y: seg.y2 };
+                    measuringOffsetPt = { ...worldPt }; // Fixes the crash
+                    measureStep = 2; // Jump directly to placing offset
+                }
+            } else if (measureStep === 2) {
+                const isSegH = Math.abs(measurePt1.y - measurePt2.y) < 0.001;
+                dimensions.push({
+                    orient: isSegH ? 'H' : 'V',
+                    pt1: { ...measurePt1 },
+                    pt2: { ...measurePt2 },
+                    offset: { ...worldPt }
+                });
+                measureStep = 0;
+                measurePt1 = null;
+                measurePt2 = null;
+                measuringOffsetPt = null;
+            }
+            drawCanvas();
+            return;
+        }
+
+        if (activeCadTool === 'measure') {
+            if (measureStep === 0) {
+                measurePt1 = measureSnapPt ? { ...measureSnapPt } : { ...worldPt };
+                measureStep = 1;
+            } else if (measureStep === 1) {
+                measurePt2 = measureSnapPt ? { ...measureSnapPt } : { ...worldPt };
+                measureStep = 2;
+            } else if (measureStep === 2) {
+                const dx = Math.abs(measuringOffsetPt.x - (measurePt1.x + measurePt2.x) / 2);
+                const dy = Math.abs(measuringOffsetPt.y - (measurePt1.y + measurePt2.y) / 2);
+                const orient = (dy > dx) ? 'H' : 'V';
+                dimensions.push({
+                    orient: orient,
+                    pt1: { ...measurePt1 },
+                    pt2: { ...measurePt2 },
+                    offset: { ...measuringOffsetPt }
+                });
+                
+                measureStep = 0;
+                measurePt1 = null;
+                measurePt2 = null;
+                measureSnapPt = null;
+                measuringOffsetPt = null;
+            }
+            drawCanvas();
+            return;
+        }
+
+        if (activeCadTool === 'trim') {
+            const segToTrim = hoveredTrimSeg || findClosestSegAtScreen(sx, sy, 10);
+            if (segToTrim) {
+                trimSegment(segToTrim);
+                return;
+            }
+            isPanningCanvas = true;
+            panStartScreen = { x: sx, y: sy };
+            panCameraInitial = { cx: camera.cx, cy: camera.cy };
+            return;
+        }
+
+        const hitDim = findClosestDimAtScreen(sx, sy, 10);
+        const hitText = findClosestTextAtScreen(sx, sy, 10);
+        
+        const hits = rectangles.filter(r =>
+            worldPt.x >= r.x && worldPt.x <= r.x + r.w &&
+            worldPt.y >= r.y && worldPt.y <= r.y + r.h
+        );
+        hits.sort((a, b) => (a.w * a.h) - (b.w * b.h));
+        let pickedRect = hits.length > 0 ? hits[0] : null;
+
+        if (hitDim.dim || hitText || pickedRect) {
+            hasDragged = false;
+            if (hitDim.dim) {
+                pickedIdOnDown = 'dim_' + hitDim.idx;
+                wasSelectedOnDown = selectedDimIndices.has(hitDim.idx);
+                if (!wasSelectedOnDown) {
+                    if (selectMode === 'single') {
+                        selectedRectIds.clear();
+                        selectedDimIndices.clear();
+                        selectedTextIds.clear();
+                    }
+                    selectedDimIndices.add(hitDim.idx);
+                }
+            } else if (hitText) {
+                pickedIdOnDown = 'text_' + hitText.id;
+                wasSelectedOnDown = selectedTextIds.has(hitText.id);
+                if (!wasSelectedOnDown) {
+                    if (selectMode === 'single') {
+                        selectedRectIds.clear();
+                        selectedDimIndices.clear();
+                        selectedTextIds.clear();
+                    }
+                    selectedTextIds.add(hitText.id);
+                }
+                
+                isDraggingText = true;
+                dragTextStart = worldPt;
+                dragTextsInitial = Array.from(selectedTextIds).map(id => {
+                    const t = texts.find(tx => tx.id === id);
+                    return { id: t.id, x: t.x, y: t.y };
+                });
+            } else if (pickedRect) {
+                pickedIdOnDown = 'rect_' + pickedRect.id;
+                wasSelectedOnDown = selectedRectIds.has(pickedRect.id);
+                if (!wasSelectedOnDown) {
+                    if (selectMode === 'single') {
+                        selectedRectIds.clear();
+                        selectedDimIndices.clear();
+                        selectedTextIds.clear();
+                    }
+                    selectedRectIds.add(pickedRect.id);
+                }
+            }
+
+            syncInspector();
+            drawCanvas();
+
+            if (selectMode === 'single' || selectMode === 'all') {
+                if (!isDraggingText) {
+                    isPanningCanvas = true;
+                    panStartScreen = { x: sx, y: sy };
+                    panCameraInitial = { cx: camera.cx, cy: camera.cy };
+                    canvas.style.cursor = 'grabbing';
+                }
+            }
+        } else {
+            pickedIdOnDown = null;
+            hasDragged = false;
+            
+            if (selectMode === 'single') {
+                selectedRectIds.clear();
+                selectedDimIndices.clear();
+                selectedTextIds.clear();
+                syncInspector();
+                drawCanvas();
+                isPanningCanvas = true;
+                panStartScreen = { x: sx, y: sy };
+                panCameraInitial = { cx: camera.cx, cy: camera.cy };
+            } else if (selectMode === 'multi' || selectMode === 'all') {
+                if (selectMode === 'all') setSelectMode('multi');
+                isBoxSelecting = true;
+                boxSelectStart = worldPt;
+                boxSelectCurrent = worldPt;
+            }
+        }
+    }
+
+    function onCanvasMouseMove(e) {
+        const rect = canvas.getBoundingClientRect();
+        const sx = e.clientX - rect.left;
+        const sy = e.clientY - rect.top;
+        const worldPt = screenToWorld(sx, sy);
+
+        document.getElementById('statusRight').innerHTML =
+            `X: ${worldPt.x.toFixed(2)} mm &nbsp; Y: ${worldPt.y.toFixed(2)} mm &nbsp;|&nbsp; Active Segments: <span id="segCountText">${getMergedExportSegments().length}</span>`;
+
+        if (activeCadTool === 'trim' && !isPanningCanvas) {
+            hoveredTrimSeg = findClosestSegAtScreen(sx, sy, 10);
+            drawCanvas();
+            return;
+        }
+
+        if (activeCadTool === 'quickmeasure' && !isPanningCanvas) {
+            if (measureStep === 0) {
+                hoveredTrimSeg = findClosestSegAtScreen(sx, sy, 10); // Find line to highlight
+            } else if (measureStep === 2) {
+                hoveredTrimSeg = null;
+                measuringOffsetPt = worldPt; // Track mouse for dimension preview
+            }
+            drawCanvas();
+            return;
+        }
+
+        if (activeCadTool === 'measure' && !isPanningCanvas) {
+            measureSnapPt = getSnapPoint(sx, sy);
+            if (measureStep === 2) measuringOffsetPt = worldPt;
+            drawCanvas();
+            return;
+        }
+
+        if (isBoxSelecting) {
+            boxSelectCurrent = worldPt;
+            drawCanvas();
+            return;
+        }
+
+        if (isDraggingText) {
+            hasDragged = true;
+            const dx = worldPt.x - dragTextStart.x;
+            const dy = worldPt.y - dragTextStart.y;
+            
+            dragTextsInitial.forEach(initial => {
+                const t = texts.find(tx => tx.id === initial.id);
+                if (t) {
+                    t.x = cleanNum(initial.x + dx);
+                    t.y = cleanNum(initial.y + dy);
+                }
+            });
+            
+            syncInspector();
+            drawCanvas();
+            return;
+        }
+
+        if (isPanningCanvas) {
+            hasDragged = true;
+            const dx = (sx - panStartScreen.x) / camera.scale;
+            const dy = (sy - panStartScreen.y) / camera.scale;
+            camera.cx = panCameraInitial.cx - dx;
+            camera.cy = panCameraInitial.cy + dy;
+            drawCanvas();
+        }
+    }
+
+    function onCanvasMouseUp() {
+        if (isBoxSelecting) {
+            isBoxSelecting = false;
+            const minX = Math.min(boxSelectStart.x, boxSelectCurrent.x);
+            const maxX = Math.max(boxSelectStart.x, boxSelectCurrent.x);
+            const minY = Math.min(boxSelectStart.y, boxSelectCurrent.y);
+            const maxY = Math.max(boxSelectStart.y, boxSelectCurrent.y);
+
+            rectangles.forEach(r => {
+                if (r.x < maxX && r.x + r.w > minX && r.y < maxY && r.y + r.h > minY) {
+                    selectedRectIds.add(r.id);
+                }
+            });
+
+            dimensions.forEach((dim, idx) => {
+                const inBox = (pt) => pt.x >= minX && pt.x <= maxX && pt.y >= minY && pt.y <= maxY;
+                if (inBox(dim.pt1) || inBox(dim.pt2) || inBox(dim.offset)) {
+                    selectedDimIndices.add(idx);
+                }
+            });
+            
+            texts.forEach(t => {
+                const textWidth = t.text.length * (t.size * 0.55); // Approximate text width
+                // Check if any part of the text block is inside the marquee box
+                if (t.x + textWidth >= minX && t.x <= maxX && t.y >= minY && t.y - t.size <= maxY) {
+                    selectedTextIds.add(t.id);
+                }
+            });
+
+            syncInspector();
+            drawCanvas();
+        } else if (!hasDragged && pickedIdOnDown) {
+            if (wasSelectedOnDown) {
+                if (selectMode === 'multi' || selectMode === 'all') {
+                    if (pickedIdOnDown.startsWith('dim_')) {
+                        selectedDimIndices.delete(parseInt(pickedIdOnDown.split('_')[1]));
+                    } else if (pickedIdOnDown.startsWith('text_')) {
+                        selectedTextIds.delete(parseInt(pickedIdOnDown.split('_')[1]));
+                    } else if (pickedIdOnDown.startsWith('rect_')) {
+                        selectedRectIds.delete(parseInt(pickedIdOnDown.split('_')[1]));
+                    }
+                }
+                syncInspector();
+                drawCanvas();
+            }
+        }
+        
+        isPanningCanvas = false;
+        isDraggingText = false;
+        canvas.style.cursor = (activeCadTool === 'trim' && hoveredTrimSeg) ? 'pointer' : 'crosshair';
+    }
+
+    function onCanvasWheel(e) {
+        e.preventDefault();
+        const zoomFactor = e.deltaY < 0 ? 1.12 : 0.89;
+        camera.scale = Math.max(0.02, Math.min(20, camera.scale * zoomFactor));
+        drawCanvas();
+    }
+
+    function onWindowKeyDown(e) {
+        if (document.activeElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+            e.preventDefault();
+            undoLastTrim();
+            return;
+        }
+        if (e.key === 'Escape' && activeCadTool === 'measure') {
+            measureStep = 0;
+            measurePt1 = null;
+            measurePt2 = null;
+            measureSnapPt = null;
+            measuringOffsetPt = null;
+            drawCanvas();
+            return;
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            deleteSelectedObject();
+        }
+    }
+
+    function openAddRectModal() {
+        const isFirst = (rectangles.length === 0);
+        const modal = document.getElementById('addRectModal');
+        const xInput = document.getElementById('modalRectX');
+        const yInput = document.getElementById('modalRectY');
+        const quickBar = document.getElementById('quickPlaceBar');
+        const posHint = document.getElementById('modalPosHint');
+
+        if (isFirst) {
+            xInput.value = '0.00';
+            yInput.value = '0.00';
+            xInput.readOnly = true;
+            yInput.readOnly = true;
+            quickBar.style.display = 'none';
+            posHint.textContent = 'First rectangle is always set at X = 0.00, Y = 0.00:';
+        } else {
+            xInput.readOnly = false;
+            yInput.readOnly = false;
+            quickBar.style.display = 'flex';
+            posHint.textContent = 'Start Position X1, Y1 (fixed after adding):';
+            const ref = rectangles.find(r => r.id === Array.from(selectedRectIds)[0]) || rectangles[rectangles.length - 1];
+            xInput.value = cleanNum(ref.x + ref.w).toFixed(2);
+            yInput.value = cleanNum(ref.y).toFixed(2);
+        }
+
+        modal.classList.add('show');
+        const wInput = document.getElementById('modalRectW');
+        wInput.focus();
+        wInput.select();
+    }
+
+    function closeAddRectModal() {
+        document.getElementById('addRectModal').classList.remove('show');
+    }
+
+    function setModalQuickTouch(where) {
+        const ref = rectangles.find(r => r.id === Array.from(selectedRectIds)[0]) || rectangles[rectangles.length - 1];
+        if (!ref) return;
+        const xInput = document.getElementById('modalRectX');
+        const yInput = document.getElementById('modalRectY');
+        if (where === 'right') {
+            xInput.value = cleanNum(ref.x + ref.w).toFixed(2);
+            yInput.value = cleanNum(ref.y).toFixed(2);
+        } else if (where === 'top') {
+            xInput.value = cleanNum(ref.x).toFixed(2);
+            yInput.value = cleanNum(ref.y + ref.h).toFixed(2);
+        } else if (where === 'origin') {
+            xInput.value = '0.00';
+            yInput.value = '0.00';
+        }
+    }
+
+    function confirmAddRectModal() {
+        const w = cleanNum(parseFloat(document.getElementById('modalRectW').value));
+        const h = cleanNum(parseFloat(document.getElementById('modalRectH').value));
+        if (!(w > 0 && h > 0)) return;
+
+        const isFirst = (rectangles.length === 0);
+        const x = isFirst ? 0 : cleanNum(parseFloat(document.getElementById('modalRectX').value) || 0);
+        const y = isFirst ? 0 : cleanNum(parseFloat(document.getElementById('modalRectY').value) || 0);
+
+        const newRect = {
+            id: nextRectId++,
+            x: x,
+            y: y,
+            w: w,
+            h: h,
+            lockedOrigin: isFirst,
+            trimmed: { bottom: [], left: [], top: [], right: [] }
+        };
+
+        rectangles.push(newRect);
+        selectedRectIds.clear();
+        selectedDimIndices.clear();
+
+        closeAddRectModal();
+        recomputeSegments();
+        fitViewToAll();
+        syncInspector();
+    }
+
+    function deleteSelectedObject() {
+        let changed = false;
+
+        if (selectedDimIndices.size > 0) {
+            const dimsToDelete = Array.from(selectedDimIndices).sort((a,b) => b - a);
+            dimsToDelete.forEach(idx => dimensions.splice(idx, 1));
+            selectedDimIndices.clear();
+            changed = true;
+        }
+
+        if (selectedTextIds.size > 0) {
+            texts = texts.filter(t => !selectedTextIds.has(t.id));
+            selectedTextIds.clear();
+            changed = true;
+        }
+
+        if (selectedRectIds.size > 0) {
+            rectangles = rectangles.filter(r => !selectedRectIds.has(r.id));
+            selectedRectIds.clear();
+
+            if (rectangles.length > 0) {
+                rectangles[0].x = 0;
+                rectangles[0].y = 0;
+                rectangles[0].lockedOrigin = true;
+            }
+            changed = true;
+        }
+
+        if (changed) {
+            recomputeSegments();
+            syncInspector();
+            drawCanvas();
+        }
+    }
+
+    function openAddTextModal() {
+        document.getElementById('addTextModal').classList.add('show');
+        const inp = document.getElementById('modalTextInput');
+        inp.value = '';
+        inp.focus();
+    }
+
+    function closeAddTextModal() {
+        document.getElementById('addTextModal').classList.remove('show');
+        textInsertPt = null;
+        setActiveCadTool('move');
+    }
+
+    function confirmAddTextModal() {
+        const txt = document.getElementById('modalTextInput').value;
+        const size = parseFloat(document.getElementById('modalTextSize').value) || 12.0;
+        
+        if (txt && textInsertPt) {
+            const lines = txt.split('\n');
+            let currentY = textInsertPt.y;
+            
+            lines.forEach((line) => {
+                if (line.trim() !== '') {
+                    texts.push({
+                        id: nextTextId++,
+                        text: line.trim(),
+                        x: cleanNum(textInsertPt.x),
+                        y: cleanNum(currentY),
+                        size: cleanNum(size)
+                    });
+                    currentY -= (size * 1.5);
+                }
+            });
+            drawCanvas();
+        }
+        
+        document.getElementById('addTextModal').classList.remove('show');
+        textInsertPt = null;
+        setActiveCadTool('move');
+    }
+
+    function setActiveCadTool(tool) {
+        activeCadTool = tool;
+        hoveredTrimSeg = null;
+        measureStep = 0;
+        measurePt1 = null;
+        measurePt2 = null;
+        measureSnapPt = null;
+        measuringOffsetPt = null;
+        
+        const moveBtn = document.getElementById('toolBtnMove');
+        const trimBtn = document.getElementById('toolBtnTrim');
+        const measureBtn = document.getElementById('toolBtnMeasure');
+        const quickMeasureBtn = document.getElementById('toolBtnQuickMeasure');
+        const textBtn = document.getElementById('toolBtnText');
+        const hintEl = document.getElementById('toolsModeHint');
+
+        if (moveBtn) moveBtn.classList.toggle('active', tool === 'move');
+        if (trimBtn) trimBtn.classList.toggle('active', tool === 'trim');
+        if (measureBtn) measureBtn.classList.toggle('active', tool === 'measure');
+        if (quickMeasureBtn) quickMeasureBtn.classList.toggle('active', tool === 'quickmeasure');
+        if (textBtn) textBtn.classList.toggle('active', tool === 'text');
+
+        if (tool === 'trim') {
+            if (hintEl) hintEl.innerHTML = '<b>Trim Active:</b> Hover any extra or touching line (turns <span style="color:#d00000;font-weight:bold;">red</span>) and click to remove it.';
+            document.getElementById('statusLeft').textContent = 'TRIM MODE: Click any green line segment on the canvas to remove it (Ctrl+Z to Undo)';
+        } else if (tool === 'measure') {
+            if (hintEl) hintEl.innerHTML = '<b>Measure Active:</b> Click 1st point, click 2nd point, move mouse & click to place.';
+            document.getElementById('statusLeft').textContent = 'MEASURE MODE: Click start point, click end point, move mouse to adjust dimension placement offset, click to place';
+        } else if (tool === 'quickmeasure') {
+            if (hintEl) hintEl.innerHTML = '<b>Quick Measure Active:</b> Click any edge, move mouse to adjust, and click to place.';
+            document.getElementById('statusLeft').textContent = 'QUICK MEASURE MODE: Click a line to grab it, move mouse to set distance, click again to place';
+        } else if (tool === 'text') {
+            if (hintEl) hintEl.innerHTML = '<b>Text Active:</b> Click anywhere on the drawing to place text.';
+            document.getElementById('statusLeft').textContent = 'TEXT MODE: Click on the canvas to open the text dialog';
+        } else {
+            if (hintEl) hintEl.innerHTML = '<b>Move Active:</b> Select any object or click and drag to pan the canvas view.';
+            document.getElementById('statusLeft').textContent = 'SELECT / PAN MODE: Select any object or drag to pan canvas | Objects are locked in place after creation';
+        }
+        drawCanvas();
+    }
+
+    function setSelectMode(mode) {
+        selectMode = mode;
+        document.getElementById('selModeSingle').classList.toggle('active', mode === 'single');
+        document.getElementById('selModeMulti').classList.toggle('active', mode === 'multi');
+        document.getElementById('selModeAll').classList.toggle('active', mode === 'all');
+        
+        if (mode === 'all') {
+            selectedRectIds = new Set(rectangles.map(r => r.id));
+            selectedDimIndices = new Set(dimensions.map((_, idx) => idx));
+            selectedTextIds = new Set(texts.map(t => t.id));
+            syncInspector();
+            drawCanvas();
+        } else if (mode === 'single') {
+            selectedRectIds.clear();
+            selectedDimIndices.clear();
+            selectedTextIds.clear();
+            syncInspector();
+            drawCanvas();
+        }
+        setActiveCadTool('move');
+    }
+
+    function buildZeiContentString() {
+        recomputeSegments();
+        const exportSegs = getMergedExportSegments();
+        if (exportSegs.length === 0) return '';
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        exportSegs.forEach(s => {
+            minX = Math.min(minX, s.x1, s.x2);
+            minY = Math.min(minY, s.y1, s.y2);
+            maxX = Math.max(maxX, s.x1, s.x2);
+            maxY = Math.max(maxY, s.y1, s.y2);
+        });
+
+        const totalW = cleanNum(maxX - Math.min(0, minX));
+        const totalH = cleanNum(maxY - Math.min(0, minY));
+
+        const lines = [
+            '*****V6.3.2',
+            'AAAAA',
+            `5 ${formatZei15(totalW)} ${formatZei15(totalH)}`,
+            '7 1',
+            'BBBBB',
+            '#####'
+        ];
+
+        exportSegs.forEach(seg => {
+            lines.push('2 0 20 2 ');
+            lines.push(formatZei15(seg.x1));
+            lines.push(formatZei15(seg.y1));
+            lines.push(formatZei15(seg.x2));
+            lines.push(formatZei15(seg.y2));
+        });
+
+        dimensions.forEach(dim => {
+            lines.push('51 0 120 12 ');
+            lines.push('1.0');
+
+            let len, textX, textY, angleDeg;
+            if (dim.orient === 'H') {
+                len = Math.abs(dim.pt2.x - dim.pt1.x);
+                textX = (dim.pt1.x + dim.pt2.x) / 2;
+                textY = dim.offset.y;
+                angleDeg = 0;
+            } else {
+                len = Math.abs(dim.pt2.y - dim.pt1.y);
+                textX = dim.offset.x;
+                textY = (dim.pt1.y + dim.pt2.y) / 2;
+                angleDeg = 90;
+            }
+
+            lines.push(formatZei15(len));
+            lines.push(formatZei15(textX));
+            lines.push(formatZei15(textY));
+            lines.push(formatZei15(dim.pt1.x));
+            lines.push(formatZei15(dim.pt1.y));
+            lines.push(formatZei15(dim.pt2.x));
+            lines.push(formatZei15(dim.pt2.y));
+            lines.push(formatZei15(angleDeg));
+            lines.push('25.000000000000000');
+            lines.push('2.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('0.000000000000000');
+        });
+
+        texts.forEach(t => {
+            lines.push('21 0 130 13 ');
+            lines.push(formatZei15(t.size));
+            lines.push(formatZei15(t.x));
+            lines.push(formatZei15(t.y));
+            lines.push('0.000000000000000');
+            lines.push('100.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('1.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push('0.000000000000000');
+            lines.push(t.text);
+        });
+
+        return lines.join('\r\n') + '\r\n';
+    }
+
+    function exportZeiFile() {
+        const content = buildZeiContentString();
+        if (!content) return;
+
+        const nameInput = document.getElementById('filenameInput').value.trim();
+        const fileName = nameInput ? `${nameInput}.zei` : 'drawing.zei';
+
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function openZeiPreviewModal() {
+        const content = buildZeiContentString();
+        document.getElementById('zeiPreviewTextarea').value = content || 'No geometry to export.';
+        document.getElementById('zeiCopyFeedback').textContent = '';
+        document.getElementById('zeiPreviewModal').classList.add('show');
+    }
+
+    function closeZeiPreviewModal() {
+        document.getElementById('zeiPreviewModal').classList.remove('show');
+    }
+
+    function copyZeiPreviewText() {
+        const ta = document.getElementById('zeiPreviewTextarea');
+        ta.select();
+        document.execCommand('copy');
+        document.getElementById('zeiCopyFeedback').textContent = 'Copied to clipboard!';
+    }
+
+    function exportCrystalClearA4PDF() {
+        recomputeSegments();
+        const exportSegs = getMergedExportSegments();
+        if (exportSegs.length === 0) return;
+
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        exportSegs.forEach(s => {
+            minX = Math.min(minX, s.x1, s.x2);
+            minY = Math.min(minY, s.y1, s.y2);
+            maxX = Math.max(maxX, s.x1, s.x2);
+            maxY = Math.max(maxY, s.y1, s.y2);
+        });
+
+        dimensions.forEach(dim => {
+            minX = Math.min(minX, dim.pt1.x, dim.pt2.x, dim.offset.x);
+            maxX = Math.max(maxX, dim.pt1.x, dim.pt2.x, dim.offset.x);
+            minY = Math.min(minY, dim.pt1.y, dim.pt2.y, dim.offset.y);
+            maxY = Math.max(maxY, dim.pt1.y, dim.pt2.y, dim.offset.y);
+        });
+
+        texts.forEach(t => {
+            minX = Math.min(minX, t.x);
+            maxX = Math.max(maxX, t.x + (t.size * 5));
+            minY = Math.min(minY, t.y - t.size);
+            maxY = Math.max(maxY, t.y);
+        });
+
+        if (minX !== Infinity) {
+            const padX = (maxX - minX) * 0.15 || 50;
+            const padY = (maxY - minY) * 0.15 || 50;
+            minX -= padX;
+            maxX += padX;
+            minY -= padY;
+            maxY += padY;
+        }
+
+        const modelW = Math.max(cleanNum(maxX - minX), 1);
+        const modelH = Math.max(cleanNum(maxY - minY), 1);
+
+        const isLandscape = modelW > modelH * 1.15;
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({
+            orientation: isLandscape ? 'landscape' : 'portrait',
+            unit: 'mm',
+            format: 'a4',
+            compress: false
+        });
+
+        const pageW = isLandscape ? 297 : 210;
+        const pageH = isLandscape ? 210 : 297;
+        const margin = 10;
+
+        const availW = pageW - margin * 2;
+        const availH = pageH - margin * 2;
+        const scale = Math.min(availW / modelW, availH / modelH);
+
+        const drawW = modelW * scale;
+        const drawH = modelH * scale;
+        const offsetX = margin + (availW - drawW) / 2;
+        const offsetY = margin + (availH - drawH) / 2;
+
+        const toPdfX = (wx) => offsetX + (wx - minX) * scale;
+        const toPdfY = (wy) => offsetY + drawH - (wy - minY) * scale;
+
+        doc.setDrawColor(0, 153, 0);
+        doc.setLineWidth(0.2);
+        exportSegs.forEach(seg => {
+            doc.line(
+                toPdfX(seg.x1),
+                toPdfY(seg.y1),
+                toPdfX(seg.x2),
+                toPdfY(seg.y2)
+            );
+        });
+
+        if (dimensions.length > 0) {
+            doc.setDrawColor(255, 0, 0);
+            doc.setTextColor(255, 0, 0);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(10);
+            doc.setLineWidth(0.15);
+
+            dimensions.forEach(dim => {
+                const px1 = toPdfX(dim.pt1.x);
+                const py1 = toPdfY(dim.pt1.y);
+                const px2 = toPdfX(dim.pt2.x);
+                const py2 = toPdfY(dim.pt2.y);
+                const pMouseX = toPdfX(dim.offset.x);
+                const pMouseY = toPdfY(dim.offset.y);
+                const arrowSizeL = 2.5;
+                const arrowSizeW = 1.0;
+
+                if (dim.orient === 'H') {
+                    doc.line(px1, py1, px1, pMouseY);
+                    doc.line(px2, py2, px2, pMouseY);
+                    doc.line(px1, pMouseY, px2, pMouseY);
+                    
+                    const leftX = Math.min(px1, px2);
+                    const rightX = Math.max(px1, px2);
+                    
+                    doc.line(leftX, pMouseY, leftX + arrowSizeL, pMouseY - arrowSizeW);
+                    doc.line(leftX, pMouseY, leftX + arrowSizeL, pMouseY + arrowSizeW);
+                    
+                    doc.line(rightX, pMouseY, rightX - arrowSizeL, pMouseY - arrowSizeW);
+                    doc.line(rightX, pMouseY, rightX - arrowSizeL, pMouseY + arrowSizeW);
+
+                    const val = Math.abs(dim.pt2.x - dim.pt1.x).toFixed(2);
+                    doc.text(val, (px1 + px2) / 2, pMouseY - 1.0, { align: 'center', baseline: 'bottom' });
+                } else {
+                    doc.line(px1, py1, pMouseX, py1);
+                    doc.line(px2, py2, pMouseX, py2);
+                    doc.line(pMouseX, py1, pMouseX, py2);
+                    
+                    const topY = Math.min(py1, py2);
+                    const bottomY = Math.max(py1, py2);
+                    
+                    doc.line(pMouseX, topY, pMouseX - arrowSizeW, topY + arrowSizeL);
+                    doc.line(pMouseX, topY, pMouseX + arrowSizeW, topY + arrowSizeL);
+                    
+                    doc.line(pMouseX, bottomY, pMouseX - arrowSizeW, bottomY - arrowSizeL);
+                    doc.line(pMouseX, bottomY, pMouseX + arrowSizeW, bottomY - arrowSizeL);
+
+                    const val = Math.abs(dim.pt2.y - dim.pt1.y).toFixed(2);
+                    doc.text(val, pMouseX - 1.5, (py1 + py2) / 2, { angle: 90, align: 'center', baseline: 'bottom' });
+                }
+            });
+        }
+
+        if (texts.length > 0) {
+            doc.setTextColor(255, 0, 255);
+            texts.forEach(t => {
+                const px = toPdfX(t.x);
+                const py = toPdfY(t.y);
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(t.size * scale * (72 / 25.4));
+                doc.text(t.text, px, py, { baseline: 'bottom' });
+            });
+        }
+
+        const nameInput = document.getElementById('filenameInput').value.trim();
+        const fileName = nameInput ? `${nameInput}.pdf` : 'cad-drawing-a4.pdf';
+
+        doc.save(fileName);
+    }
+
+    window.onload = initApp;
+</script>
+</body>
+</html>
